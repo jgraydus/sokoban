@@ -49,8 +49,6 @@ OOOOOOOO".into());
             let cell_size = SIZE as f64 / 8.0;
             let (x,y) = ((x as f64 / cell_size).floor(), (y as f64 / cell_size).floor());
 
-            web_sys::console::log_1(&JsValue::from_str(&format!("{x:?}, {y:?}")));
-
             if let Some(dir) = game.player.direction_to(&Location { x, y }) {
                 game.apply_move(dir);
             }
