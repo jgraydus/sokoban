@@ -1,5 +1,8 @@
 use crate::constants::*;
+use crate::engine::*;
+use crate::engine::events::*;
 use crate::sprite::*;
+use crate::utils;
 use wasm_bindgen::prelude::*;
 
 pub struct Game {
@@ -191,3 +194,14 @@ OOOOOOOO".into())
     }
 }
 
+impl Runnable for Game {
+    fn update(&mut self, time: &Time, evt: Option<Event>) {
+        if let Some(Event::Click { x, y }) = evt {
+            self.handle_click(Location { x: x as f64, y: y as f64 });
+        }
+    }
+
+    fn draw(&self, canvas: &web_sys::HtmlCanvasElement) {
+        self.draw(&utils::get_context2d(canvas));
+    }
+}

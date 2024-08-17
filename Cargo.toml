@@ -26,6 +26,7 @@ features = [
   "ImageData",
   "OffscreenCanvas",
   "OffscreenCanvasRenderingContext2d",
+  "Performance",
   "PointerEvent",
   "Window"
 ]
