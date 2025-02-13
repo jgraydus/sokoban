@@ -23,6 +23,7 @@ features = [
   "Document",
   "Element",
   "HtmlCanvasElement",
+  "ImageBitmap",
   "ImageData",
   "OffscreenCanvas",
   "OffscreenCanvasRenderingContext2d",
