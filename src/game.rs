@@ -9,6 +9,7 @@ use std::{
     default::Default,
 };
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::JsFuture;
 use web_sys::ImageBitmap;
 
 const CELLS: u32 = 8;
@@ -28,42 +29,12 @@ pub struct Game {
     goals: Vec<Location>,
     pub player: Location,
     background: Option<OffscreenCanvasSprite>,
-    sprites: BTreeMap<SpriteType, ImageBitmap>, 
+    sprites: BTreeMap<SpriteType, ImageBitmap>,
+    level: u32,
+    is_won: bool,
 }
 
-impl Game {
-    pub fn from_string(sprites: BTreeMap<SpriteType, ImageBitmap>, s: String) -> Self {
-        let mut g = Self {
-            walls: Vec::new(),
-            blocks: Vec::new(),
-            goals: Vec::new(),
-            player: Location { x: 0.0, y: 0.0 },
-            background: None,
-            sprites,
-        };
-
-        for (y, line) in s.lines().enumerate() {
-            for (x, c) in line.chars().enumerate() {
-                let loc = Location { x: x as f64, y: y as f64 };
-                match c {
-                    'O' => { g.walls.push(loc); }
-                    '.' => { g.goals.push(loc); }
-                    'x' => { g.blocks.push(loc); }
-                    'X' => { g.blocks.push(loc.clone()); g.goals.push(loc); }
-                    'p' => { g.player = loc; }
-                    'P' => { g.goals.push(loc.clone()); g.player = loc; }
-                    _ => {}
-                }
-            }
-        }
-
-        g.render_background();
-
-        g
-    }
-
-    pub fn example(sprites: BTreeMap<SpriteType, ImageBitmap>) -> Game {
-        Game::from_string(sprites,
+const LEVEL_01: &str = 
 r"  OOOOO
 OOO   O
 O.px  O
@@ -72,7 +43,94 @@ O.OOx O
 O O . OO
 Ox Xxx.O
 O   .  O
-OOOOOOOO".into())
+OOOOOOOO";
+
+impl Game {
+    pub async fn new() -> Self {
+        let wall = {
+            let tmp = web_sys::window()
+                .expect("window not found?!")
+                .create_image_bitmap_with_image_data(&blocks::wall())
+                .unwrap();
+            JsFuture::from(tmp).await
+                .expect("FOOOOOOO!")
+                .dyn_into::<web_sys::ImageBitmap>()
+                .expect("on no")
+        };
+
+        let floor = {
+            let tmp = web_sys::window()
+                .expect("window not found?!")
+                .create_image_bitmap_with_image_data(&blocks::floor())
+                .unwrap();
+            JsFuture::from(tmp).await
+                .expect("FOOOOOOO!")
+                .dyn_into::<web_sys::ImageBitmap>()
+                .expect("on no")
+        };
+
+        let moveable = {
+            let tmp = web_sys::window()
+                .expect("window not found?!")
+                .create_image_bitmap_with_image_data(&blocks::moveable())
+                .unwrap();
+            JsFuture::from(tmp).await
+                .expect("FOOOOOOO!")
+                .dyn_into::<web_sys::ImageBitmap>()
+                .expect("on no")
+        };
+
+        let mut sprites = BTreeMap::from([
+            (SpriteType::Wall, wall),
+            (SpriteType::Floor, floor),
+            (SpriteType::Moveable, moveable),
+        ]);
+
+        let mut g = Self {
+            walls: Vec::new(),
+            blocks: Vec::new(),
+            goals: Vec::new(),
+            player: Location { x: 0.0, y: 0.0 },
+            level: 1,
+            is_won: false,
+            background: None,
+            sprites,
+        };
+
+        g.load_level(1);
+
+        g
+    }
+
+    fn load_level(&mut self, level: u32) {
+        self.walls.clear();
+        self.blocks.clear();
+        self.goals.clear();
+        self.background = None;
+        self.level = level;
+        self.is_won = false;
+
+        let s = match level {
+          1 => LEVEL_01,
+          _ => panic!(),
+        };
+
+        for (y, line) in s.lines().enumerate() {
+            for (x, c) in line.chars().enumerate() {
+                let loc = Location { x: x as f64, y: y as f64 };
+                match c {
+                    'O' => { self.walls.push(loc); }
+                    '.' => { self.goals.push(loc); }
+                    'x' => { self.blocks.push(loc); }
+                    'X' => { self.blocks.push(loc.clone()); self.goals.push(loc); }
+                    'p' => { self.player = loc; }
+                    'P' => { self.goals.push(loc.clone()); self.player = loc; }
+                    _ => {}
+                }
+            }
+        }
+
+        self.render_background();
     }
 
     fn valid_moves(&self) -> Vec<Location> {
@@ -112,11 +170,18 @@ OOOOOOOO".into())
     }
 
     pub fn handle_click(&mut self, Location { x, y }: Location) {
+        // check if player clicked the reset button
+        let s = SIZE as f64;
+        if x > s + 50.0 && x < s + 150.0 && y > s - 100.0 && y < s - 50.0 {
+            self.load_level(self.level);
+        }
+
         let (x,y) = ((x / CELL_SIZE).floor(), (y / CELL_SIZE).floor());
 
         if let Some(dir) = self.player.direction_to(&Location { x, y }) {
             self.apply_move(dir);
         }
+
     }
 
     pub fn draw(&self, cxt: &web_sys::CanvasRenderingContext2d) {
@@ -129,7 +194,7 @@ OOOOOOOO".into())
                   Size { w: SIZE as f64, h: SIZE as f64 });
 
         // draw blocks
-        cxt.set_fill_style(&JsValue::from_str("#660000"));
+        cxt.set_fill_style_str(&"#660000");
         for item in &self.blocks {
             cxt.draw_image_with_image_bitmap_and_dw_and_dh(
                 &self.sprites.get(&SpriteType::Moveable).unwrap(),
@@ -140,7 +205,7 @@ OOOOOOOO".into())
         }
 
         // draw goals
-        cxt.set_fill_style(&JsValue::from_str("#664422"));
+        cxt.set_fill_style_str(&"#664422");
         for item in &self.goals {
             cxt.begin_path();
             cxt.ellipse(item.x * CELL_SIZE + CELL_SIZE / 2.0,
@@ -154,7 +219,7 @@ OOOOOOOO".into())
         }
 
         // draw player
-        cxt.set_fill_style(&JsValue::from_str("#66FF88"));
+        cxt.set_fill_style_str(&"#66FF88");
         cxt.begin_path();
         cxt.ellipse(self.player.x * CELL_SIZE + CELL_SIZE / 2.0,
                     self.player.y * CELL_SIZE + CELL_SIZE / 2.0,
@@ -167,13 +232,20 @@ OOOOOOOO".into())
 
         // outline valid moves
         for item in self.valid_moves() {
-            cxt.set_stroke_style(&JsValue::from_str("#669966"));
+            cxt.set_stroke_style_str(&"#669966");
             cxt.set_line_width(2.0);
             cxt.stroke_rect(item.x * CELL_SIZE + 1.0,
                             item.y * CELL_SIZE + 1.0,
                             CELL_SIZE - 2.0,
                             CELL_SIZE - 2.0);
         }
+
+        // draw ui stuff
+        cxt.set_stroke_style_str(&"#FF0000");
+        cxt.stroke_rect(SIZE as f64 + 50.0, SIZE as f64 - 100.0, 100.0, 50.0);
+        cxt.set_fill_style_str(&"#FF0000");
+        cxt.set_font(&"20pt sans-serif");
+        cxt.fill_text(&"RESET", SIZE as f64 + 57.0, SIZE as f64 - 65.0);
     }
 
     fn render_background(&mut self) {
@@ -185,10 +257,10 @@ OOOOOOOO".into())
             .expect("failed to convert result into Context2d");
         cxt.set_image_smoothing_enabled(false);
 
-        cxt.set_fill_style(&JsValue::from_str("#444444"));
+        cxt.set_fill_style_str(&"#444444");
         cxt.fill_rect(0.0, 0.0, SIZE as f64, SIZE as f64);
 
-        cxt.set_stroke_style(&JsValue::from_str("#333333"));
+        cxt.set_stroke_style_str(&"#333333");
         for row in 0..CELLS {
             for col in 0..CELLS {
                 let x = col as f64 * CELL_SIZE;
