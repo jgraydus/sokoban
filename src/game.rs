@@ -34,7 +34,7 @@ pub struct Game {
     is_won: bool,
 }
 
-const LEVEL_01: &str = 
+const LEVEL_01: &str =
 r"  OOOOO
 OOO   O
 O.px  O
@@ -43,6 +43,16 @@ O.OOx O
 O O . OO
 Ox Xxx.O
 O   .  O
+OOOOOOOO";
+
+const LEVEL_02: &str =
+r"  OOOOOO
+  O .. O
+  O .  O
+OOOx. OO
+O   O OO
+O pxxx O
+O      O
 OOOOOOOO";
 
 impl Game {
@@ -112,7 +122,8 @@ impl Game {
 
         let s = match level {
           1 => LEVEL_01,
-          _ => panic!(),
+          2 => LEVEL_02,
+          _ => LEVEL_02,
         };
 
         for (y, line) in s.lines().enumerate() {
@@ -167,13 +178,25 @@ impl Game {
             }
             self.player = new_loc;
         }
+        self.check_for_win();
+    }
+
+    fn check_for_win(&mut self) {
+        for goal in &self.goals {
+            if !self.blocks.contains(&goal) { return; }
+        }
+        self.is_won = true;
     }
 
     pub fn handle_click(&mut self, Location { x, y }: Location) {
-        // check if player clicked the reset button
+        // check if player clicked the button
         let s = SIZE as f64;
         if x > s + 50.0 && x < s + 150.0 && y > s - 100.0 && y < s - 50.0 {
-            self.load_level(self.level);
+            if self.is_won {
+                self.load_level(self.level + 1);
+            } else {
+                self.load_level(self.level);
+            }
         }
 
         let (x,y) = ((x / CELL_SIZE).floor(), (y / CELL_SIZE).floor());
@@ -185,6 +208,10 @@ impl Game {
     }
 
     pub fn draw(&self, cxt: &web_sys::CanvasRenderingContext2d) {
+        // clear
+        cxt.set_fill_style_str(&"#000000");
+        cxt.fill_rect(0.0, 0.0, SIZE as f64 + 200.0, SIZE as f64);
+
         // draw background
         self.background
             .as_ref()
@@ -241,11 +268,20 @@ impl Game {
         }
 
         // draw ui stuff
-        cxt.set_stroke_style_str(&"#FF0000");
-        cxt.stroke_rect(SIZE as f64 + 50.0, SIZE as f64 - 100.0, 100.0, 50.0);
-        cxt.set_fill_style_str(&"#FF0000");
-        cxt.set_font(&"20pt sans-serif");
-        cxt.fill_text(&"RESET", SIZE as f64 + 57.0, SIZE as f64 - 65.0);
+        if self.is_won {
+            cxt.set_stroke_style_str(&"#00FF00");
+            cxt.stroke_rect(SIZE as f64 + 50.0, SIZE as f64 - 100.0, 100.0, 50.0);
+            cxt.set_fill_style_str(&"#00FF00");
+            cxt.set_font(&"12pt sans-serif");
+            cxt.fill_text(&"NEXT", SIZE as f64 + 78.0, SIZE as f64 - 78.0);
+            cxt.fill_text(&"LEVEL", SIZE as f64 + 75.0, SIZE as f64 - 60.0);
+        } else {
+            cxt.set_stroke_style_str(&"#FF0000");
+            cxt.stroke_rect(SIZE as f64 + 50.0, SIZE as f64 - 100.0, 100.0, 50.0);
+            cxt.set_fill_style_str(&"#FF0000");
+            cxt.set_font(&"20pt sans-serif");
+            cxt.fill_text(&"RESET", SIZE as f64 + 57.0, SIZE as f64 - 65.0);
+        }
     }
 
     fn render_background(&mut self) {
